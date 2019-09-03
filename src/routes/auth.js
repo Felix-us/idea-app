@@ -1,9 +1,17 @@
 import { Router } from "express";
-import User from '../models/Users';
+import User from '../models/User';
 
+import passport from 'passport';
 import jwt from 'jsonwebtoken';
 
 const router = new Router();
+
+const requireLogin = passport.authenticate('local', { 
+    successRedirect: '/index',
+    failureRedirect: '/',
+    failureFlash: true,
+    session: false 
+});
 
 // auth signup
 router.post('/signup', (req, res) => {
@@ -42,7 +50,7 @@ router.post('/signup', (req, res) => {
 });
 
 // auth login
-router.post('/signin', (req, res) => {
+router.post('/signin', requireLogin, (req, res) => {
     User.findOne({ email: req.body.email }).then((user) => {
         if (!user) {
             res.status(401).send({
@@ -53,10 +61,16 @@ router.post('/signin', (req, res) => {
             // check if password matches
             user.verifyPassword(req.body.password, (err, isMatch) => {
                 if (isMatch && !err) {
-                    var token = jwt.sign(user.toJSON(), 'SecretKey', { expiresIn: '30m' });
+                    var payload = { id: user.id };
+                    var token = jwt.sign(payload, process.env.API_JWT_SECRET, { expiresIn: '1h' });
                     res.json({
                         success: true,
-                        token: token
+                        token: token,
+                        user: {
+                            _id: user._id,
+                            name: user.name,
+                            email: user.email
+                        }
                     });
                 } else {
                     res.status(401).send({
@@ -77,7 +91,10 @@ router.post('/signin', (req, res) => {
 // auth logout
 router.get('/logout', (req, res) => {
     // handle with passport
-    res.send('logging out');
+    // res.send('logging out');
+    req.logout();
+    req.flash('success_msg', 'You are logged out');
+    res.redirect('/users/login');
 });
 
 // auth with google
